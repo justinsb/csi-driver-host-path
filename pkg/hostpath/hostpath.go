@@ -80,10 +80,6 @@ type Config struct {
 	CheckVolumeLifecycle       bool
 }
 
-var (
-	vendorVersion = "dev"
-)
-
 const (
 	// Extension with which snapshot files will be saved.
 	snapshotExt = ".snap"
