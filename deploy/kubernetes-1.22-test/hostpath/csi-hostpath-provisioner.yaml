@@ -3,7 +3,7 @@ apiVersion: apps/v1
 metadata:
   name: csi-hostpath-provisioner
   labels:
-    app.kubernetes.io/instance: hostpath.csi.k8s.io
+    app.kubernetes.io/instance: lvm.csi.justinsb.com
     app.kubernetes.io/part-of: csi-driver-host-path
     app.kubernetes.io/name: csi-hostpath-provisioner
     app.kubernetes.io/component: provisioner
@@ -12,14 +12,14 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/instance: hostpath.csi.k8s.io
+      app.kubernetes.io/instance: lvm.csi.justinsb.com
       app.kubernetes.io/part-of: csi-driver-host-path
       app.kubernetes.io/name: csi-hostpath-provisioner
       app.kubernetes.io/component: provisioner
   template:
     metadata:
       labels:
-        app.kubernetes.io/instance: hostpath.csi.k8s.io
+        app.kubernetes.io/instance: lvm.csi.justinsb.com
         app.kubernetes.io/part-of: csi-driver-host-path
         app.kubernetes.io/name: csi-hostpath-provisioner
         app.kubernetes.io/component: provisioner
@@ -32,7 +32,7 @@ spec:
               - key: app.kubernetes.io/instance
                 operator: In
                 values:
-                  - hostpath.csi.k8s.io
+                  - lvm.csi.justinsb.com
             topologyKey: kubernetes.io/hostname
       serviceAccountName: csi-provisioner
       containers:

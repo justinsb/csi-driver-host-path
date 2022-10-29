@@ -12,14 +12,14 @@ kind: Service
 metadata:
   name: hostpath-service
   labels:
-    app.kubernetes.io/instance: hostpath.csi.k8s.io
+    app.kubernetes.io/instance: lvm.csi.justinsb.com
     app.kubernetes.io/part-of: csi-driver-host-path
     app.kubernetes.io/name: csi-hostpath-socat
     app.kubernetes.io/component: socat
 spec:
   type: NodePort
   selector:
-    app.kubernetes.io/instance: hostpath.csi.k8s.io
+    app.kubernetes.io/instance: lvm.csi.justinsb.com
     app.kubernetes.io/part-of: csi-driver-host-path
     app.kubernetes.io/name: csi-hostpath-socat
     app.kubernetes.io/component: socat
@@ -31,7 +31,7 @@ apiVersion: apps/v1
 metadata:
   name: csi-hostpath-socat
   labels:
-    app.kubernetes.io/instance: hostpath.csi.k8s.io
+    app.kubernetes.io/instance: lvm.csi.justinsb.com
     app.kubernetes.io/part-of: csi-driver-host-path
     app.kubernetes.io/name: csi-hostpath-socat
     app.kubernetes.io/component: socat
@@ -40,14 +40,14 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/instance: hostpath.csi.k8s.io
+      app.kubernetes.io/instance: lvm.csi.justinsb.com
       app.kubernetes.io/part-of: csi-driver-host-path
       app.kubernetes.io/name: csi-hostpath-socat
       app.kubernetes.io/component: socat
   template:
     metadata:
       labels:
-        app.kubernetes.io/instance: hostpath.csi.k8s.io
+        app.kubernetes.io/instance: lvm.csi.justinsb.com
         app.kubernetes.io/part-of: csi-driver-host-path
         app.kubernetes.io/name: csi-hostpath-socat
         app.kubernetes.io/component: socat
@@ -60,7 +60,7 @@ spec:
               - key: app.kubernetes.io/instance
                 operator: In
                 values:
-                  - hostpath.csi.k8s.io
+                  - lvm.csi.justinsb.com
             topologyKey: kubernetes.io/hostname
       containers:
         - name: socat

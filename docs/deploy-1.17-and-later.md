@@ -86,13 +86,13 @@ deploying hostpath components
 service/csi-hostpath-attacher created
 statefulset.apps/csi-hostpath-attacher created
    deploy/kubernetes-latest/hostpath/csi-hostpath-driverinfo.yaml
-csidriver.storage.k8s.io/hostpath.csi.k8s.io created
+csidriver.storage.k8s.io/lvm.csi.justinsb.com created
    deploy/kubernetes-latest/hostpath/csi-hostpath-plugin.yaml
         using           image: quay.io/k8scsi/csi-node-driver-registrar:v1.2.0
-        using           image: quay.io/k8scsi/hostpathplugin:v1.3.0
+        using           image: quay.io/k8scsi/lvmplugin:v1.3.0
         using           image: quay.io/k8scsi/livenessprobe:v1.1.0
-service/csi-hostpathplugin created
-statefulset.apps/csi-hostpathplugin created
+service/csi-lvmplugin created
+statefulset.apps/csi-lvmplugin created
    deploy/kubernetes-latest/hostpath/csi-hostpath-provisioner.yaml
         using           image: quay.io/k8scsi/csi-provisioner:v1.5.0
 service/csi-hostpath-provisioner created
@@ -129,7 +129,7 @@ csi-hostpath-provisioner-0   1/1     Running   0          4m19s
 csi-hostpath-resizer-0       1/1     Running   0          4m19s
 csi-hostpath-snapshotter-0   1/1     Running   0          4m18s
 csi-hostpath-socat-0         1/1     Running   0          4m18s
-csi-hostpathplugin-0         3/3     Running   0          4m20s
+csi-lvmplugin-0         3/3     Running   0          4m20s
 snapshot-controller-0        1/1     Running   0          4m37s
 ```
 
@@ -231,7 +231,7 @@ $ kubectl exec -it my-csi-app /bin/sh
 
 Next, ssh into the Hostpath container and verify that the file shows up there:
 ```shell
-$ kubectl exec -it $(kubectl get pods --selector app=csi-hostpathplugin -o jsonpath='{.items[*].metadata.name}') -c hostpath /bin/sh
+$ kubectl exec -it $(kubectl get pods --selector app=csi-lvmplugin -o jsonpath='{.items[*].metadata.name}') -c hostpath /bin/sh
 
 ```
 Then, use the following command to locate the file. If everything works OK you should get a result similar to the following:
@@ -260,7 +260,7 @@ Metadata:
   Self Link:           /apis/storage.k8s.io/v1/volumeattachments/csi-5f182b564c52cd52e04e148a1feef00d470155e051924893d3aee8c3b26b8471
   UID:                 2d28d7e4-cda1-4ba9-a8fc-56fe081d71e9
 Spec:
-  Attacher:   hostpath.csi.k8s.io
+  Attacher:   lvm.csi.justinsb.com
   Node Name:  csi-prow-worker
   Source:
     Persistent Volume Name:  pvc-ad827273-8d08-430b-9d5a-e60e05a2bc3e

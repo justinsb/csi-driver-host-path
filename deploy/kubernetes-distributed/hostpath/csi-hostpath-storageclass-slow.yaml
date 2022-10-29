@@ -3,11 +3,11 @@ kind: StorageClass
 metadata:
   name: csi-hostpath-slow
   labels:
-    app.kubernetes.io/instance: hostpath.csi.k8s.io
+    app.kubernetes.io/instance: lvm.csi.justinsb.com
     app.kubernetes.io/part-of: csi-driver-host-path
     app.kubernetes.io/name: csi-hostpath-slow
     app.kubernetes.io/component: storageclass
-provisioner: hostpath.csi.k8s.io
+provisioner: lvm.csi.justinsb.com
 volumeBindingMode: WaitForFirstConsumer
 parameters:
   kind: slow

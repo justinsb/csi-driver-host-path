@@ -237,7 +237,7 @@ configvar CSI_PROW_SANITY_REPO https://github.com/kubernetes-csi/csi-test "csi-t
 configvar CSI_PROW_SANITY_VERSION v5.0.0 "csi-test version"
 configvar CSI_PROW_SANITY_PACKAGE_PATH github.com/kubernetes-csi/csi-test "csi-test package"
 configvar CSI_PROW_SANITY_SERVICE "hostpath-service" "Kubernetes TCP service name that exposes csi.sock"
-configvar CSI_PROW_SANITY_POD "csi-hostpathplugin-0" "Kubernetes pod with CSI driver"
+configvar CSI_PROW_SANITY_POD "csi-lvmplugin-0" "Kubernetes pod with CSI driver"
 configvar CSI_PROW_SANITY_CONTAINER "hostpath" "Kubernetes container with CSI driver"
 
 # The version of dep to use for 'make test-vendor'. Ignored if the project doesn't

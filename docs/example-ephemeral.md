@@ -9,14 +9,14 @@ To test this feature on Kubernetes 1.15 (and only with that release), redeploy t
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
-  name: csi-hostpathplugin
+  name: csi-lvmplugin
 spec:
 ...
   template:
     spec:
       containers:
         - name: hostpath
-          image: image: quay.io/k8scsi/hostpathplugin:v1.2.0
+          image: image: quay.io/k8scsi/lvmplugin:v1.2.0
           args:
             - "--v=5"
             - "--endpoint=$(CSI_ENDPOINT)"
@@ -47,7 +47,7 @@ spec:
   volumes:
     - name: my-csi-volume
       csi:
-        driver: hostpath.csi.k8s.io
+        driver: lvm.csi.justinsb.com
 ``` 
 
 > See sample YAML file [here](../examples/csi-app-inline.yaml).

@@ -2,14 +2,14 @@
 
 ## Usage:
 
-### Build hostpathplugin
+### Build lvmplugin
 ```
 $ make
 ```
 
 ### Start Hostpath driver
 ```
-$ sudo ./bin/hostpathplugin --endpoint tcp://127.0.0.1:10000 --nodeid CSINode -v=5
+$ sudo ./bin/lvmplugin --endpoint tcp://127.0.0.1:10000 --nodeid CSINode -v=5
 ```
 
 ### Test using csc

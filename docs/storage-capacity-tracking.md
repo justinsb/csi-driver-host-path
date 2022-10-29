@@ -104,9 +104,9 @@ index ce9abc40..e212feb6 100644
              - --node-deployment=true
              - --strict-topology=true
 @@ -88,7 +88,7 @@ spec:
-           image: k8s.gcr.io/sig-storage/hostpathplugin:v1.7.3
+           image: k8s.gcr.io/sig-storage/lvmplugin:v1.7.3
            args:
-             - --drivername=hostpath.csi.k8s.io
+             - --drivername=lvm.csi.justinsb.com
 -            - --v=5
 +            - --v=3
              - --endpoint=$(CSI_ENDPOINT)
@@ -146,17 +146,17 @@ scheduling retries are needed, with kube-scheduler often picking nodes as
 candidates that are already full:
 
 ```
-$ for i in `kubectl get pods | grep csi-hostpathplugin- | sed -e 's/ .*//'`; do echo "$i: $(kubectl logs $i hostpath | grep '^E.*code = ResourceExhausted desc = requested capacity .*exceeds remaining capacity for "fast"' | wc -l)"; done
-csi-hostpathplugin-5c74t: 24
-csi-hostpathplugin-8q9kf: 0
-csi-hostpathplugin-g4gqp: 15
-csi-hostpathplugin-hqxpv: 14
-csi-hostpathplugin-jpvj8: 10
-csi-hostpathplugin-l4bzm: 17
-csi-hostpathplugin-m54cc: 16
-csi-hostpathplugin-r26b4: 0
-csi-hostpathplugin-rnkjn: 7
-csi-hostpathplugin-xmvwf: 26
+$ for i in `kubectl get pods | grep csi-lvmplugin- | sed -e 's/ .*//'`; do echo "$i: $(kubectl logs $i hostpath | grep '^E.*code = ResourceExhausted desc = requested capacity .*exceeds remaining capacity for "fast"' | wc -l)"; done
+csi-lvmplugin-5c74t: 24
+csi-lvmplugin-8q9kf: 0
+csi-lvmplugin-g4gqp: 15
+csi-lvmplugin-hqxpv: 14
+csi-lvmplugin-jpvj8: 10
+csi-lvmplugin-l4bzm: 17
+csi-lvmplugin-m54cc: 16
+csi-lvmplugin-r26b4: 0
+csi-lvmplugin-rnkjn: 7
+csi-lvmplugin-xmvwf: 26
 ```
 
 These failed volume creation attempts are handled without deleting the affected
@@ -205,9 +205,9 @@ index ce9abc40..88983120 100644
              - --feature-gates=Topology=true
              - --enable-capacity
 @@ -88,7 +88,7 @@ spec:
-           image: k8s.gcr.io/sig-storage/hostpathplugin:v1.7.3
+           image: k8s.gcr.io/sig-storage/lvmplugin:v1.7.3
            args:
-             - --drivername=hostpath.csi.k8s.io
+             - --drivername=lvm.csi.justinsb.com
 -            - --v=5
 +            - --v=3
              - --endpoint=$(CSI_ENDPOINT)
@@ -231,7 +231,7 @@ Starting pods was more than twice as fast as without storage capacity tracking
 There were still a few failed provisioning attempts (total shown here):
 
 ```
-for i in `kubectl get pods | grep csi-hostpathplugin- | sed -e 's/ .*//'`; do kubectl logs $i hostpath ; done | grep '^E.*code = ResourceExhausted desc = requested capacity .*exceeds remaining capacity for "fast"' | wc -l
+for i in `kubectl get pods | grep csi-lvmplugin- | sed -e 's/ .*//'`; do kubectl logs $i hostpath ; done | grep '^E.*code = ResourceExhausted desc = requested capacity .*exceeds remaining capacity for "fast"' | wc -l
 27
 ```
 
@@ -278,7 +278,7 @@ E0307 00:38:02.164444  175511 clusterloader.go:236]   Errors: [measurement call 
 The total number of failed volume allocations was:
 
 ```
-$ for i in `kubectl get pods | grep csi-hostpathplugin- | sed -e 's/ .*//'`; do kubectl logs $i hostpath ; done | grep '^E.*code = ResourceExhausted desc = requested capacity .*exceeds remaining capacity for "fast"' | wc -l
+$ for i in `kubectl get pods | grep csi-lvmplugin- | sed -e 's/ .*//'`; do kubectl logs $i hostpath ; done | grep '^E.*code = ResourceExhausted desc = requested capacity .*exceeds remaining capacity for "fast"' | wc -l
 181508
 ```
 
@@ -355,7 +355,7 @@ Status:        Pending
 Volume:        
 Labels:        app=deployment-176
                group=volume-test
-Annotations:   volume.beta.kubernetes.io/storage-provisioner: hostpath.csi.k8s.io
+Annotations:   volume.beta.kubernetes.io/storage-provisioner: lvm.csi.justinsb.com
 Finalizers:    [kubernetes.io/pvc-protection]
 Capacity:      
 Access Modes:  
@@ -365,27 +365,27 @@ Events:
   Type     Reason                Age                     From                                                                               Message
   ----     ------                ----                    ----                                                                               -------
   Normal   WaitForPodScheduled   7m8s (x16 over 8m39s)   persistentvolume-controller                                                        waiting for pod deployment-176-bb8cc865b-9gz7b to be scheduled
-  Normal   Provisioning          6m13s (x2 over 8m24s)   hostpath.csi.k8s.io_csi-hostpathplugin-4lh5p_1d18e99a-ce86-4517-9619-a109ea7c33d9  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
-  Warning  ProvisioningFailed    6m13s (x2 over 8m24s)   hostpath.csi.k8s.io_csi-hostpathplugin-4lh5p_1d18e99a-ce86-4517-9619-a109ea7c33d9  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
-  Normal   Provisioning          5m38s (x5 over 8m44s)   hostpath.csi.k8s.io_csi-hostpathplugin-s5vhk_dc0ecff1-8f7c-47a2-9cf6-add7b6216d74  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
-  Warning  ProvisioningFailed    5m38s (x5 over 8m44s)   hostpath.csi.k8s.io_csi-hostpathplugin-s5vhk_dc0ecff1-8f7c-47a2-9cf6-add7b6216d74  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
-  Normal   ExternalProvisioning  3m42s (x27 over 8m44s)  persistentvolume-controller                                                        waiting for a volume to be created, either by external provisioner "hostpath.csi.k8s.io" or manually created by system administrator
-  Normal   Provisioning          115s (x6 over 6m48s)    hostpath.csi.k8s.io_csi-hostpathplugin-2zmtd_7dff6f7c-1d47-4269-8db3-a5c3ec74b39a  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
-  Warning  ProvisioningFailed    115s (x6 over 6m48s)    hostpath.csi.k8s.io_csi-hostpathplugin-2zmtd_7dff6f7c-1d47-4269-8db3-a5c3ec74b39a  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
-  Normal   Provisioning          67s (x5 over 7m)        hostpath.csi.k8s.io_csi-hostpathplugin-8mqk7_c982557d-0a17-406a-aa06-ca3e97715ad8  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
-  Warning  ProvisioningFailed    67s (x5 over 7m)        hostpath.csi.k8s.io_csi-hostpathplugin-8mqk7_c982557d-0a17-406a-aa06-ca3e97715ad8  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
-  Normal   Provisioning          55s (x4 over 4m5s)      hostpath.csi.k8s.io_csi-hostpathplugin-5dhxm_18b26463-08bd-4b35-9d4e-3b4565381432  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
-  Warning  ProvisioningFailed    55s (x4 over 4m5s)      hostpath.csi.k8s.io_csi-hostpathplugin-5dhxm_18b26463-08bd-4b35-9d4e-3b4565381432  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
-  Warning  ProvisioningFailed    44s (x5 over 8m34s)     hostpath.csi.k8s.io_csi-hostpathplugin-kg52t_75dcbf6c-afa5-4e84-9dfd-b10c20f51e3a  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
-  Normal   Provisioning          44s (x5 over 8m34s)     hostpath.csi.k8s.io_csi-hostpathplugin-kg52t_75dcbf6c-afa5-4e84-9dfd-b10c20f51e3a  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
-  Warning  ProvisioningFailed    32s (x3 over 7m48s)     hostpath.csi.k8s.io_csi-hostpathplugin-4gg76_f9f1f670-6765-4722-9265-7d9971501874  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
-  Normal   Provisioning          32s (x3 over 7m48s)     hostpath.csi.k8s.io_csi-hostpathplugin-4gg76_f9f1f670-6765-4722-9265-7d9971501874  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
-  Warning  ProvisioningFailed    20s (x10 over 8m40s)    hostpath.csi.k8s.io_csi-hostpathplugin-p8h4z_ba4c2251-f7e9-4497-bb10-c8597fbe1d32  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
-  Normal   Provisioning          20s (x10 over 8m40s)    hostpath.csi.k8s.io_csi-hostpathplugin-p8h4z_ba4c2251-f7e9-4497-bb10-c8597fbe1d32  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
-  Normal   Provisioning          8s (x6 over 6m36s)      hostpath.csi.k8s.io_csi-hostpathplugin-h9hrq_51e8adfd-bbf4-474e-ae6e-4f7d7f65809c  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
-  Warning  ProvisioningFailed    8s (x6 over 6m36s)      hostpath.csi.k8s.io_csi-hostpathplugin-h9hrq_51e8adfd-bbf4-474e-ae6e-4f7d7f65809c  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
+  Normal   Provisioning          6m13s (x2 over 8m24s)   lvm.csi.justinsb.com_csi-lvmplugin-4lh5p_1d18e99a-ce86-4517-9619-a109ea7c33d9  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
+  Warning  ProvisioningFailed    6m13s (x2 over 8m24s)   lvm.csi.justinsb.com_csi-lvmplugin-4lh5p_1d18e99a-ce86-4517-9619-a109ea7c33d9  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
+  Normal   Provisioning          5m38s (x5 over 8m44s)   lvm.csi.justinsb.com_csi-lvmplugin-s5vhk_dc0ecff1-8f7c-47a2-9cf6-add7b6216d74  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
+  Warning  ProvisioningFailed    5m38s (x5 over 8m44s)   lvm.csi.justinsb.com_csi-lvmplugin-s5vhk_dc0ecff1-8f7c-47a2-9cf6-add7b6216d74  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
+  Normal   ExternalProvisioning  3m42s (x27 over 8m44s)  persistentvolume-controller                                                        waiting for a volume to be created, either by external provisioner "lvm.csi.justinsb.com" or manually created by system administrator
+  Normal   Provisioning          115s (x6 over 6m48s)    lvm.csi.justinsb.com_csi-lvmplugin-2zmtd_7dff6f7c-1d47-4269-8db3-a5c3ec74b39a  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
+  Warning  ProvisioningFailed    115s (x6 over 6m48s)    lvm.csi.justinsb.com_csi-lvmplugin-2zmtd_7dff6f7c-1d47-4269-8db3-a5c3ec74b39a  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
+  Normal   Provisioning          67s (x5 over 7m)        lvm.csi.justinsb.com_csi-lvmplugin-8mqk7_c982557d-0a17-406a-aa06-ca3e97715ad8  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
+  Warning  ProvisioningFailed    67s (x5 over 7m)        lvm.csi.justinsb.com_csi-lvmplugin-8mqk7_c982557d-0a17-406a-aa06-ca3e97715ad8  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
+  Normal   Provisioning          55s (x4 over 4m5s)      lvm.csi.justinsb.com_csi-lvmplugin-5dhxm_18b26463-08bd-4b35-9d4e-3b4565381432  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
+  Warning  ProvisioningFailed    55s (x4 over 4m5s)      lvm.csi.justinsb.com_csi-lvmplugin-5dhxm_18b26463-08bd-4b35-9d4e-3b4565381432  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
+  Warning  ProvisioningFailed    44s (x5 over 8m34s)     lvm.csi.justinsb.com_csi-lvmplugin-kg52t_75dcbf6c-afa5-4e84-9dfd-b10c20f51e3a  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
+  Normal   Provisioning          44s (x5 over 8m34s)     lvm.csi.justinsb.com_csi-lvmplugin-kg52t_75dcbf6c-afa5-4e84-9dfd-b10c20f51e3a  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
+  Warning  ProvisioningFailed    32s (x3 over 7m48s)     lvm.csi.justinsb.com_csi-lvmplugin-4gg76_f9f1f670-6765-4722-9265-7d9971501874  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
+  Normal   Provisioning          32s (x3 over 7m48s)     lvm.csi.justinsb.com_csi-lvmplugin-4gg76_f9f1f670-6765-4722-9265-7d9971501874  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
+  Warning  ProvisioningFailed    20s (x10 over 8m40s)    lvm.csi.justinsb.com_csi-lvmplugin-p8h4z_ba4c2251-f7e9-4497-bb10-c8597fbe1d32  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
+  Normal   Provisioning          20s (x10 over 8m40s)    lvm.csi.justinsb.com_csi-lvmplugin-p8h4z_ba4c2251-f7e9-4497-bb10-c8597fbe1d32  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
+  Normal   Provisioning          8s (x6 over 6m36s)      lvm.csi.justinsb.com_csi-lvmplugin-h9hrq_51e8adfd-bbf4-474e-ae6e-4f7d7f65809c  External provisioner is provisioning volume for claim "test-1a4kwd-1/deployment-176-bb8cc865b-9gz7b-vol-0"
+  Warning  ProvisioningFailed    8s (x6 over 6m36s)      lvm.csi.justinsb.com_csi-lvmplugin-h9hrq_51e8adfd-bbf4-474e-ae6e-4f7d7f65809c  failed to provision volume with StorageClass "csi-hostpath-fast": rpc error: code = ResourceExhausted desc = requested capacity 5368709120 exceeds remaining capacity for "fast", 100Gi out of 100Gi already used
 
-$ for i in `kubectl get pods | grep csi-hostpathplugin- | sed -e 's/ .*//'`; do kubectl logs $i hostpath ; done | grep '^E.*code = ResourceExhausted desc = requested capacity .*exceeds remaining capacity for "fast"' | wc -l
+$ for i in `kubectl get pods | grep csi-lvmplugin- | sed -e 's/ .*//'`; do kubectl logs $i hostpath ; done | grep '^E.*code = ResourceExhausted desc = requested capacity .*exceeds remaining capacity for "fast"' | wc -l
 1822
 ```
 

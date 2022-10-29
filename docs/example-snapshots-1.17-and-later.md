@@ -21,10 +21,10 @@ Ensure your volumesnapshotclass was created during hostpath deployment:
 > Namespace:
 > Labels:           <none>
 > Annotations:      kubectl.kubernetes.io/last-applied-configuration:
->                     {"apiVersion":"snapshot.storage.k8s.io/v1beta1","deletionPolicy":"Delete","driver":"hostpath.csi.k8s.io","kind":"VolumeSnapshotClass","met...
+>                     {"apiVersion":"snapshot.storage.k8s.io/v1beta1","deletionPolicy":"Delete","driver":"lvm.csi.justinsb.com","kind":"VolumeSnapshotClass","met...
 > API Version:      snapshot.storage.k8s.io/v1beta1
 > Deletion Policy:  Delete
-> Driver:           hostpath.csi.k8s.io
+> Driver:           lvm.csi.justinsb.com
 > Kind:             VolumeSnapshotClass
 > Metadata:
 >   Creation Timestamp:  2020-03-09T20:53:32Z
@@ -104,7 +104,7 @@ use the volume snapshot class to dynamically create a volume snapshot:
 >   UID:               665657cd-4461-476c-9cdb-5c0490c58945
 > Spec:
 >   Deletion Policy:  Delete
->   Driver:           hostpath.csi.k8s.io
+>   Driver:           lvm.csi.justinsb.com
 >   Source:
 >     Volume Handle:             42bdc1e0-624e-11ea-beee-42d40678b2d1
 >   Volume Snapshot Class Name:  csi-hostpath-snapclass

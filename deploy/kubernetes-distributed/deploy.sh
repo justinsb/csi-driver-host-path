@@ -32,8 +32,8 @@ default_kubelet_data_dir=/var/lib/kubelet
 # - CSI_PROVISIONER_TAG
 # - CSI_SNAPSHOTTER_REGISTRY
 # - CSI_SNAPSHOTTER_TAG
-# - HOSTPATHPLUGIN_REGISTRY
-# - HOSTPATHPLUGIN_TAG
+# - lvmplugin_REGISTRY
+# - lvmplugin_TAG
 #
 # Alternatively, it is possible to override all registries or tags with:
 # - IMAGE_REGISTRY
@@ -159,7 +159,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 commonLabels:
-  app.kubernetes.io/instance: hostpath.csi.k8s.io
+  app.kubernetes.io/instance: lvm.csi.justinsb.com
   app.kubernetes.io/part-of: csi-driver-host-path
 
 resources:
@@ -256,14 +256,14 @@ wait_for_daemonset () {
 
 
 # Wait until the DaemonSet is running on all nodes.
-if ! wait_for_daemonset default csi-hostpathplugin; then
+if ! wait_for_daemonset default csi-lvmplugin; then
     echo
     echo "driver not ready"
     echo "Deployment:"
-    (set +e; set -x; kubectl describe all,role,clusterrole,rolebinding,clusterrolebinding,serviceaccount,storageclass,csidriver --all-namespaces -l app.kubernetes.io/instance=hostpath.csi.k8s.io)
+    (set +e; set -x; kubectl describe all,role,clusterrole,rolebinding,clusterrolebinding,serviceaccount,storageclass,csidriver --all-namespaces -l app.kubernetes.io/instance=lvm.csi.justinsb.com)
     echo
     echo "Pod logs:"
-    kubectl get pods -l app.kubernetes.io/instance=hostpath.csi.k8s.io --all-namespaces -o=jsonpath='{range .items[*]}{.metadata.name}{" "}{range .spec.containers[*]}{.name}{" "}{end}{"\n"}{end}' | while read -r pod containers; do
+    kubectl get pods -l app.kubernetes.io/instance=lvm.csi.justinsb.com --all-namespaces -o=jsonpath='{range .items[*]}{.metadata.name}{" "}{range .spec.containers[*]}{.name}{" "}{end}{"\n"}{end}' | while read -r pod containers; do
         for c in $containers; do
             echo
             (set +e; set -x; kubectl logs $pod $c)

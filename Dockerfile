@@ -15,9 +15,9 @@
 FROM alpine
 LABEL maintainers="Kubernetes Authors"
 LABEL description="HostPath Driver"
-ARG binary=./bin/hostpathplugin
+ARG binary=./bin/lvmplugin
 
 # Add util-linux to get a new version of losetup.
 RUN apk add util-linux coreutils && apk update && apk upgrade
-COPY ${binary} /hostpathplugin
-ENTRYPOINT ["/hostpathplugin"]
+COPY ${binary} /lvmplugin
+ENTRYPOINT ["/lvmplugin"]

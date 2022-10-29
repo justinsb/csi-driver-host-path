@@ -5,7 +5,7 @@
 StorageClass:
   FromExistingClassName: csi-hostpath-fast
 DriverInfo:
-  Name: hostpath.csi.k8s.io
+  Name: lvm.csi.justinsb.com
   SupportedSizeRange:
     Min: 1Mi
   Capabilities:

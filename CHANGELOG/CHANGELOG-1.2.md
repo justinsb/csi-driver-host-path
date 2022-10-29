@@ -2,7 +2,7 @@
 
 ## Breaking Changes
 
-- The deployment uses `hostpath.csi.k8s.io` as driver name ([#64](https://github.com/kubernetes-csi/csi-driver-host-path/pull/64), [@pohly](https://github.com/pohly)).
+- The deployment uses `lvm.csi.justinsb.com` as driver name ([#64](https://github.com/kubernetes-csi/csi-driver-host-path/pull/64), [@pohly](https://github.com/pohly)).
   Make sure that there are no persistent or ephemeral volumes using the old `csi-hostpath` name before updating because otherwise
   those volumes cannot be removed. Pods with such ephemeral volumes will be stuck in "terminating" state. New pods
   will not be able to start if they reference a volume that uses the old name.
