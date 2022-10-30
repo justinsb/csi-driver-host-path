@@ -199,6 +199,8 @@ commonLabels:
   app.kubernetes.io/instance: lvm.csi.justinsb.com
   app.kubernetes.io/part-of: csi-driver-host-path
 
+namespace: csi-lvm-system
+
 resources:
 - ./rbac.yaml
 EOF

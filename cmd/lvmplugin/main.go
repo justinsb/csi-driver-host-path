@@ -36,7 +36,7 @@ func init() {
 
 var (
 	// Set by the build process
-	version = ""
+	version = "dev"
 )
 
 func main() {
@@ -44,25 +44,33 @@ func main() {
 		VendorVersion: version,
 	}
 
+	cfg.DriverName = "lvm.csi.justinsb.com"
+	cfg.MaxVolumesPerNode = 0 // no limit
+	cfg.AttachLimit = 0       // no limit
+	cfg.EnableVolumeExpansion = true
+	cfg.EnableAttach = false
+	cfg.EnableTopology = true
+	cfg.Ephemeral = false
+
 	flag.StringVar(&cfg.Endpoint, "endpoint", "unix://tmp/csi.sock", "CSI endpoint")
-	flag.StringVar(&cfg.DriverName, "drivername", "lvm.csi.justinsb.com", "name of the driver")
+	flag.StringVar(&cfg.DriverName, "drivername", cfg.DriverName, "name of the driver")
 	flag.StringVar(&cfg.StateDir, "statedir", "/csi-data-dir", "directory for storing state information across driver restarts, volumes and snapshots")
 	flag.StringVar(&cfg.NodeID, "nodeid", "", "node id")
-	flag.BoolVar(&cfg.Ephemeral, "ephemeral", false, "publish volumes in ephemeral mode even if kubelet did not ask for it (only needed for Kubernetes 1.15)")
-	flag.Int64Var(&cfg.MaxVolumesPerNode, "maxvolumespernode", 0, "limit of volumes per node")
+	flag.BoolVar(&cfg.Ephemeral, "ephemeral", cfg.Ephemeral, "publish volumes in ephemeral mode even if kubelet did not ask for it (only needed for Kubernetes 1.15)")
+	flag.Int64Var(&cfg.MaxVolumesPerNode, "maxvolumespernode", cfg.MaxVolumesPerNode, "limit of volumes per node")
 	flag.Var(&cfg.Capacity, "capacity", "Simulate storage capacity. The parameter is <kind>=<quantity> where <kind> is the value of a 'kind' storage class parameter and <quantity> is the total amount of bytes for that kind. The flag may be used multiple times to configure different kinds.")
-	flag.BoolVar(&cfg.EnableAttach, "enable-attach", false, "Enables RPC_PUBLISH_UNPUBLISH_VOLUME capability.")
+	flag.BoolVar(&cfg.EnableAttach, "enable-attach", cfg.EnableAttach, "Enables RPC_PUBLISH_UNPUBLISH_VOLUME capability.")
 	flag.BoolVar(&cfg.CheckVolumeLifecycle, "check-volume-lifecycle", false, "Can be used to turn some violations of the volume lifecycle into warnings instead of failing the incorrect gRPC call. Disabled by default because of https://github.com/kubernetes/kubernetes/issues/101911.")
 	flag.Int64Var(&cfg.MaxVolumeSize, "max-volume-size", 1024*1024*1024*1024, "maximum size of volumes in bytes (inclusive)")
-	flag.BoolVar(&cfg.EnableTopology, "enable-topology", true, "Enables PluginCapability_Service_VOLUME_ACCESSIBILITY_CONSTRAINTS capability.")
-	flag.BoolVar(&cfg.EnableVolumeExpansion, "node-expand-required", true, "Enables volume expansion capability of the plugin(Deprecated). Please use enable-volume-expansion flag.")
+	flag.BoolVar(&cfg.EnableTopology, "enable-topology", cfg.EnableTopology, "Enables PluginCapability_Service_VOLUME_ACCESSIBILITY_CONSTRAINTS capability.")
+	// flag.BoolVar(&cfg.EnableVolumeExpansion, "node-expand-required", cfg.EnableVolumeExpansion, "Enables volume expansion capability of the plugin(Deprecated). Please use enable-volume-expansion flag.")
 
-	flag.BoolVar(&cfg.EnableVolumeExpansion, "enable-volume-expansion", true, "Enables volume expansion feature.")
-	flag.BoolVar(&cfg.DisableControllerExpansion, "disable-controller-expansion", false, "Disables Controller volume expansion capability.")
-	flag.BoolVar(&cfg.DisableNodeExpansion, "disable-node-expansion", false, "Disables Node volume expansion capability.")
+	flag.BoolVar(&cfg.EnableVolumeExpansion, "enable-volume-expansion", cfg.EnableVolumeExpansion, "Enables volume expansion feature.")
+	// flag.BoolVar(&cfg.DisableControllerExpansion, "disable-controller-expansion", false, "Disables Controller volume expansion capability.")
+	// flag.BoolVar(&cfg.DisableNodeExpansion, "disable-node-expansion", false, "Disables Node volume expansion capability.")
 	flag.Int64Var(&cfg.MaxVolumeExpansionSizeNode, "max-volume-size-node", 0, "Maximum allowed size of volume when expanded on the node. Defaults to same size as max-volume-size.")
 
-	flag.Int64Var(&cfg.AttachLimit, "attach-limit", 0, "Maximum number of attachable volumes on a node. Zero refers to no limit.")
+	flag.Int64Var(&cfg.AttachLimit, "attach-limit", cfg.AttachLimit, "Maximum number of attachable volumes on a node. Zero refers to no limit.")
 	showVersion := flag.Bool("version", false, "Show version.")
 	// The proxy-endpoint option is intended to used by the Kubernetes E2E test suite
 	// for proxying incoming calls to the embedded mock CSI driver.
@@ -107,7 +115,8 @@ func main() {
 		cfg.MaxVolumeExpansionSizeNode = cfg.MaxVolumeSize
 	}
 
-	driver, err := hostpath.NewHostPathDriver(cfg)
+	lvm := hostpath.NewLVM("pool", "thinpool")
+	driver, err := hostpath.NewHostPathDriver(cfg, lvm)
 	if err != nil {
 		fmt.Printf("Failed to initialize driver: %s", err.Error())
 		os.Exit(1)

@@ -12,12 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM alpine
-LABEL maintainers="Kubernetes Authors"
-LABEL description="HostPath Driver"
-ARG binary=./bin/lvmplugin
+FROM golang:1.19.2 AS builder
+WORKDIR /workspace
+COPY go.mod go.sum /workspace/
+RUN go mod download
+ADD cmd /workspace/cmd/
+ADD pkg /workspace/pkg/
+ADD internal /workspace/internal/
+RUN CGO_ENABLED=0 go build -o /workspace/lvmplugin ./cmd/lvmplugin
 
+FROM debian:bullseye
 # Add util-linux to get a new version of losetup.
-RUN apk add util-linux coreutils && apk update && apk upgrade
-COPY ${binary} /lvmplugin
+# RUN apk add util-linux coreutils && apk update && apk upgrade
+RUN apt-get update && apt-get install --yes lvm2 mount e2fsprogs
+COPY --from=builder /workspace/lvmplugin /lvmplugin
 ENTRYPOINT ["/lvmplugin"]

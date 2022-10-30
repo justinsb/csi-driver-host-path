@@ -1,3 +1,21 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: csi-lvm-system
+
+---
+
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: direct-storage
+provisioner: lvm.csi.justinsb.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+
+---
+
 # All of the individual sidecar RBAC roles get bound
 # to this account.
 kind: ServiceAccount
@@ -26,8 +44,8 @@ roleRef:
   name: external-attacher-runner
 subjects:
 - kind: ServiceAccount
-  name: csi-lvmplugin-sa
-  namespace: default
+  name: csi-lvmplugin
+  namespace: csi-lvm-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -44,8 +62,8 @@ roleRef:
   name: external-health-monitor-controller-runner
 subjects:
 - kind: ServiceAccount
-  name: csi-lvmplugin-sa
-  namespace: default
+  name: csi-lvmplugin
+  namespace: csi-lvm-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -62,8 +80,8 @@ roleRef:
   name: external-provisioner-runner
 subjects:
 - kind: ServiceAccount
-  name: csi-lvmplugin-sa
-  namespace: default
+  name: csi-lvmplugin
+  namespace: csi-lvm-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -80,8 +98,8 @@ roleRef:
   name: external-resizer-runner
 subjects:
 - kind: ServiceAccount
-  name: csi-lvmplugin-sa
-  namespace: default
+  name: csi-lvmplugin
+  namespace: csi-lvm-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -98,8 +116,8 @@ roleRef:
   name: external-snapshotter-runner
 subjects:
 - kind: ServiceAccount
-  name: csi-lvmplugin-sa
-  namespace: default
+  name: csi-lvmplugin
+  namespace: csi-lvm-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -110,13 +128,14 @@ metadata:
     app.kubernetes.io/name: csi-lvmplugin
     app.kubernetes.io/component: attacher-role
   name: csi-lvmplugin-attacher-role
+  namespace: csi-lvm-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: external-attacher-cfg
 subjects:
 - kind: ServiceAccount
-  name: csi-lvmplugin-sa
+  name: csi-lvmplugin
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -127,13 +146,14 @@ metadata:
     app.kubernetes.io/name: csi-lvmplugin
     app.kubernetes.io/component: health-monitor-controller-role
   name: csi-lvmplugin-health-monitor-controller-role
+  namespace: csi-lvm-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: external-health-monitor-controller-cfg
 subjects:
 - kind: ServiceAccount
-  name: csi-lvmplugin-sa
+  name: csi-lvmplugin
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -144,13 +164,14 @@ metadata:
     app.kubernetes.io/name: csi-lvmplugin
     app.kubernetes.io/component: provisioner-role
   name: csi-lvmplugin-provisioner-role
+  namespace: csi-lvm-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: external-provisioner-cfg
 subjects:
 - kind: ServiceAccount
-  name: csi-lvmplugin-sa
+  name: csi-lvmplugin
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -161,13 +182,14 @@ metadata:
     app.kubernetes.io/name: csi-lvmplugin
     app.kubernetes.io/component: resizer-role
   name: csi-lvmplugin-resizer-role
+  namespace: csi-lvm-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: external-resizer-cfg
 subjects:
 - kind: ServiceAccount
-  name: csi-lvmplugin-sa
+  name: csi-lvmplugin
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -178,17 +200,19 @@ metadata:
     app.kubernetes.io/name: csi-lvmplugin
     app.kubernetes.io/component: snapshotter-role
   name: csi-lvmplugin-snapshotter-role
+  namespace: csi-lvm-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: external-snapshotter-leaderelection
 subjects:
 - kind: ServiceAccount
-  name: csi-lvmplugin-sa
+  name: csi-lvmplugin
 ---
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
+  namespace: csi-lvm-system
   name: csi-lvmplugin
   labels:
     app.kubernetes.io/instance: lvm.csi.justinsb.com
@@ -215,10 +239,10 @@ spec:
         app.kubernetes.io/name: csi-lvmplugin
         app.kubernetes.io/component: plugin
     spec:
-      serviceAccountName: csi-lvmplugin-sa
+      serviceAccountName: csi-lvmplugin
       containers:
         - name: lvmplugin
-          image: registry.k8s.io/sig-storage/lvmplugin:v1.9.0
+          image: justinsb/csi-lvm-controller:latest
           args:
             - "--drivername=lvm.csi.justinsb.com"
             - "--v=5"
@@ -279,7 +303,7 @@ spec:
           args:
             - --v=5
             - --csi-address=/csi/csi.sock
-            - --kubelet-registration-path=/var/lib/kubelet/plugins/csi-lvmplugin/csi.sock
+            - --kubelet-registration-path=/var/lib/kubelet/plugins/csi.lvm.justinsb.com/csi.sock
           securityContext:
             # This is necessary only for systems with SELinux, where
             # non-privileged sidecar containers cannot access unix domain socket
@@ -367,7 +391,7 @@ spec:
 
       volumes:
         - hostPath:
-            path: /var/lib/kubelet/plugins/csi-lvm
+            path: /var/lib/kubelet/plugins/csi.lvm.justinsb.com
             type: DirectoryOrCreate
           name: socket-dir
         - hostPath:

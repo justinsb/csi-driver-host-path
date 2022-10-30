@@ -19,36 +19,34 @@ package hostpath
 import (
 	"fmt"
 	"os"
-	"strings"
+
+	"context"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
-	"github.com/kubernetes-csi/csi-driver-host-path/pkg/state"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/kubernetes/pkg/volume/util/volumepathhandler"
-	"k8s.io/utils/mount"
+	"k8s.io/klog/v2"
+	"k8s.io/mount-utils"
 )
 
 const TopologyKeyNode = "topology.hostpath.csi/node"
 
-func (hp *hostPath) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-
+func (s *hostPath) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	// Check arguments
 	if req.GetVolumeCapability() == nil {
 		return nil, status.Error(codes.InvalidArgument, "Volume capability missing in request")
 	}
-	if len(req.GetVolumeId()) == 0 {
+	if req.GetVolumeId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
-	if len(req.GetTargetPath()) == 0 {
+	if req.GetTargetPath() == "" {
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 
 	targetPath := req.GetTargetPath()
 	ephemeralVolume := req.GetVolumeContext()["csi.storage.k8s.io/ephemeral"] == "true" ||
-		req.GetVolumeContext()["csi.storage.k8s.io/ephemeral"] == "" && hp.config.Ephemeral // Kubernetes 1.15 doesn't have csi.storage.k8s.io/ephemeral.
+		req.GetVolumeContext()["csi.storage.k8s.io/ephemeral"] == "" && s.config.Ephemeral // Kubernetes 1.15 doesn't have csi.storage.k8s.io/ephemeral.
 
 	if req.GetVolumeCapability().GetBlock() != nil &&
 		req.GetVolumeCapability().GetMount() != nil {
@@ -57,86 +55,91 @@ func (hp *hostPath) NodePublishVolume(ctx context.Context, req *csi.NodePublishV
 
 	// Lock before acting on global state. A production-quality
 	// driver might use more fine-grained locking.
-	hp.mutex.Lock()
-	defer hp.mutex.Unlock()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
 	// if ephemeral is specified, create volume here to avoid errors
 	if ephemeralVolume {
-		volID := req.GetVolumeId()
-		volName := fmt.Sprintf("ephemeral-%s", volID)
-		kind := req.GetVolumeContext()[storageKind]
-		// Configurable size would be nice. For now we use a small, fixed volume size of 100Mi.
-		volSize := int64(100 * 1024 * 1024)
-		vol, err := hp.createVolume(req.GetVolumeId(), volName, volSize, state.MountAccess, ephemeralVolume, kind)
-		if err != nil && !os.IsExist(err) {
-			glog.Error("ephemeral mode failed to create volume: ", err)
-			return nil, err
-		}
-		glog.V(4).Infof("ephemeral mode: created volume: %s", vol.VolPath)
+		return nil, status.Errorf(codes.Unimplemented, "ephemeral volumes not implemented")
+		// volID := req.GetVolumeId()
+		// volName := fmt.Sprintf("ephemeral-%s", volID)
+		// kind := req.GetVolumeContext()[storageKind]
+		// // Configurable size would be nice. For now we use a small, fixed volume size of 100Mi.
+		// volSize := int64(100 * 1024 * 1024)
+		// vol, err := hp.createVolume(req.GetVolumeId(), volName, volSize, state.MountAccess, ephemeralVolume, kind)
+		// if err != nil && !os.IsExist(err) {
+		// 	glog.Error("ephemeral mode failed to create volume: ", err)
+		// 	return nil, err
+		// }
+		// glog.V(4).Infof("ephemeral mode: created volume: %s", vol.VolPath)
 	}
 
-	vol, err := hp.state.GetVolumeByID(req.GetVolumeId())
+	vol, err := s.lvm.findVolumeByVolumeID(ctx, req.GetVolumeId())
 	if err != nil {
-		return nil, status.Error(codes.NotFound, err.Error())
+		return nil, status.Errorf(codes.Internal, "error finding volume %q: %v", req.GetVolumeId(), err)
+	}
+	if vol == nil {
+		return nil, status.Errorf(codes.NotFound, "volume %q not found")
 	}
 
-	if !ephemeralVolume {
-		if vol.Staged.Empty() {
-			return nil, status.Errorf(codes.FailedPrecondition, "volume %q must be staged before publishing", vol.VolID)
-		}
-		if !vol.Staged.Has(req.GetStagingTargetPath()) {
-			return nil, status.Errorf(codes.InvalidArgument, "volume %q was staged at %v, not %q", vol.VolID, vol.Staged, req.GetStagingTargetPath())
-		}
-	}
+	// if !ephemeralVolume {
+	// 	if vol.Staged.Empty() {
+	// 		return nil, status.Errorf(codes.FailedPrecondition, "volume %q must be staged before publishing", vol.VolID)
+	// 	}
+	// 	if !vol.Staged.Has(req.GetStagingTargetPath()) {
+	// 		return nil, status.Errorf(codes.InvalidArgument, "volume %q was staged at %v, not %q", vol.VolID, vol.Staged, req.GetStagingTargetPath())
+	// 	}
+	// }
 
 	if req.GetVolumeCapability().GetBlock() != nil {
-		if vol.VolAccessType != state.BlockAccess {
-			return nil, status.Error(codes.InvalidArgument, "cannot publish a non-block volume as block volume")
-		}
+		return nil, status.Errorf(codes.Unimplemented, "block volumes not implemented")
+		// if vol.VolAccessType != state.BlockAccess {
+		// 	return nil, status.Error(codes.InvalidArgument, "cannot publish a non-block volume as block volume")
+		// }
 
-		volPathHandler := volumepathhandler.VolumePathHandler{}
+		// volPathHandler := volumepathhandler.VolumePathHandler{}
 
-		// Get loop device from the volume path.
-		loopDevice, err := volPathHandler.GetLoopDevice(vol.VolPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get the loop device: %w", err)
-		}
+		// // Get loop device from the volume path.
+		// loopDevice, err := volPathHandler.GetLoopDevice(vol.VolPath)
+		// if err != nil {
+		// 	return nil, fmt.Errorf("failed to get the loop device: %w", err)
+		// }
 
-		mounter := mount.New("")
+		// mounter := mount.New("")
 
-		// Check if the target path exists. Create if not present.
-		_, err = os.Lstat(targetPath)
-		if os.IsNotExist(err) {
-			if err = makeFile(targetPath); err != nil {
-				return nil, fmt.Errorf("failed to create target path: %w", err)
-			}
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to check if the target block file exists: %w", err)
-		}
+		// // Check if the target path exists. Create if not present.
+		// _, err = os.Lstat(targetPath)
+		// if os.IsNotExist(err) {
+		// 	if err = makeFile(targetPath); err != nil {
+		// 		return nil, fmt.Errorf("failed to create target path: %w", err)
+		// 	}
+		// }
+		// if err != nil {
+		// 	return nil, fmt.Errorf("failed to check if the target block file exists: %w", err)
+		// }
 
-		// Check if the target path is already mounted. Prevent remounting.
-		notMount, err := mount.IsNotMountPoint(mounter, targetPath)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("error checking path %s for mount: %w", targetPath, err)
-			}
-			notMount = true
-		}
-		if !notMount {
-			// It's already mounted.
-			glog.V(5).Infof("Skipping bind-mounting subpath %s: already mounted", targetPath)
-			return &csi.NodePublishVolumeResponse{}, nil
-		}
+		// // Check if the target path is already mounted. Prevent remounting.
+		// notMount, err := mount.IsNotMountPoint(mounter, targetPath)
+		// if err != nil {
+		// 	if !os.IsNotExist(err) {
+		// 		return nil, fmt.Errorf("error checking path %s for mount: %w", targetPath, err)
+		// 	}
+		// 	notMount = true
+		// }
+		// if !notMount {
+		// 	// It's already mounted.
+		// 	glog.V(5).Infof("Skipping bind-mounting subpath %s: already mounted", targetPath)
+		// 	return &csi.NodePublishVolumeResponse{}, nil
+		// }
 
-		options := []string{"bind"}
-		if err := mount.New("").Mount(loopDevice, targetPath, "", options); err != nil {
-			return nil, fmt.Errorf("failed to mount block device: %s at %s: %w", loopDevice, targetPath, err)
-		}
+		// options := []string{"bind"}
+		// if err := mount.New("").Mount(loopDevice, targetPath, "", options); err != nil {
+		// 	return nil, fmt.Errorf("failed to mount block device: %s at %s: %w", loopDevice, targetPath, err)
+		// }
 	} else if req.GetVolumeCapability().GetMount() != nil {
-		if vol.VolAccessType != state.MountAccess {
-			return nil, status.Error(codes.InvalidArgument, "cannot publish a non-mount volume as mount volume")
-		}
+		// if vol.VolAccessType != state.MountAccess {
+		// 	return nil, status.Error(codes.InvalidArgument, "cannot publish a non-mount volume as mount volume")
+		// }
 
 		notMnt, err := mount.IsNotMountPoint(mount.New(""), targetPath)
 		if err != nil {
@@ -151,7 +154,8 @@ func (hp *hostPath) NodePublishVolume(ctx context.Context, req *csi.NodePublishV
 		}
 
 		if !notMnt {
-			return &csi.NodePublishVolumeResponse{}, nil
+			return nil, status.Errorf(codes.Internal, "target path %q was not a mount point", targetPath)
+			// return &csi.NodePublishVolumeResponse{}, nil
 		}
 
 		fsType := req.GetVolumeCapability().GetMount().GetFsType()
@@ -166,6 +170,11 @@ func (hp *hostPath) NodePublishVolume(ctx context.Context, req *csi.NodePublishV
 		attrib := req.GetVolumeContext()
 		mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
 
+		volumePath, err := s.lvm.getVolumePath(ctx, vol.LogicalVolumeName)
+		if err != nil {
+			return nil, err
+		}
+
 		glog.V(4).Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeId %v\nattributes %v\nmountflags %v\n",
 			targetPath, fsType, deviceId, readOnly, volumeId, attrib, mountFlags)
 
@@ -174,35 +183,34 @@ func (hp *hostPath) NodePublishVolume(ctx context.Context, req *csi.NodePublishV
 			options = append(options, "ro")
 		}
 		mounter := mount.New("")
-		path := hp.getVolumePath(volumeId)
 
-		if err := mounter.Mount(path, targetPath, "", options); err != nil {
-			var errList strings.Builder
-			errList.WriteString(err.Error())
-			if vol.Ephemeral {
-				if rmErr := os.RemoveAll(path); rmErr != nil && !os.IsNotExist(rmErr) {
-					errList.WriteString(fmt.Sprintf(" :%s", rmErr.Error()))
-				}
-			}
-			return nil, fmt.Errorf("failed to mount device: %s at %s: %s", path, targetPath, errList.String())
+		if err := mounter.Mount(volumePath, targetPath, "", options); err != nil {
+			// var errList strings.Builder
+			// errList.WriteString(err.Error())
+			// if vol.Ephemeral {
+			// 	if rmErr := os.RemoveAll(path); rmErr != nil && !os.IsNotExist(rmErr) {
+			// 		errList.WriteString(fmt.Sprintf(" :%s", rmErr.Error()))
+			// 	}
+			// }
+			// return nil, fmt.Errorf("failed to mount device: %s at %s: %s", path, targetPath, errList.String())
+			return nil, fmt.Errorf("failed to mount at %q: %w", targetPath, err)
 		}
 	}
 
-	vol.NodeID = hp.config.NodeID
-	vol.Published.Add(targetPath)
-	if err := hp.state.UpdateVolume(vol); err != nil {
-		return nil, err
-	}
+	// vol.NodeID = hp.config.NodeID
+	// vol.Published.Add(targetPath)
+	// if err := hp.state.UpdateVolume(vol); err != nil {
+	// 	return nil, err
+	// }
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
-func (hp *hostPath) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
-
+func (s *hostPath) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	// Check arguments
-	if len(req.GetVolumeId()) == 0 {
+	if req.GetVolumeId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
-	if len(req.GetTargetPath()) == 0 {
+	if req.GetTargetPath() == "" {
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 	targetPath := req.GetTargetPath()
@@ -210,18 +218,21 @@ func (hp *hostPath) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpubl
 
 	// Lock before acting on global state. A production-quality
 	// driver might use more fine-grained locking.
-	hp.mutex.Lock()
-	defer hp.mutex.Unlock()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
-	vol, err := hp.state.GetVolumeByID(volumeID)
+	vol, err := s.lvm.findVolumeByVolumeID(ctx, volumeID)
 	if err != nil {
 		return nil, err
 	}
-
-	if !vol.Published.Has(targetPath) {
-		glog.V(4).Infof("Volume %q is not published at %q, nothing to do.", volumeID, targetPath)
+	if vol == nil {
+		klog.Warningf("volume %q was not found; assuming already unpublished", volumeID)
 		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
+	// if !vol.Published.Has(targetPath) {
+	// 	glog.V(4).Infof("Volume %q is not published at %q, nothing to do.", volumeID, targetPath)
+	// 	return &csi.NodeUnpublishVolumeResponse{}, nil
+	// }
 
 	// Unmount only if the target path is really a mount point.
 	if notMnt, err := mount.IsNotMountPoint(mount.New(""), targetPath); err != nil {
@@ -242,23 +253,22 @@ func (hp *hostPath) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpubl
 	}
 	glog.V(4).Infof("hostpath: volume %s has been unpublished.", targetPath)
 
-	if vol.Ephemeral {
-		glog.V(4).Infof("deleting volume %s", volumeID)
-		if err := hp.deleteVolume(volumeID); err != nil && !os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to delete volume: %w", err)
-		}
-	} else {
-		vol.Published.Remove(targetPath)
-		if err := hp.state.UpdateVolume(vol); err != nil {
-			return nil, err
-		}
-	}
+	// if vol.Ephemeral {
+	// 	glog.V(4).Infof("deleting volume %s", volumeID)
+	// 	if err := hp.deleteVolume(volumeID); err != nil && !os.IsNotExist(err) {
+	// 		return nil, fmt.Errorf("failed to delete volume: %w", err)
+	// 	}
+	// } else {
+	// 	vol.Published.Remove(targetPath)
+	// 	if err := hp.state.UpdateVolume(vol); err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func (hp *hostPath) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-
+func (s *hostPath) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	// Check arguments
 	if len(req.GetVolumeId()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
@@ -273,40 +283,42 @@ func (hp *hostPath) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolum
 
 	// Lock before acting on global state. A production-quality
 	// driver might use more fine-grained locking.
-	hp.mutex.Lock()
-	defer hp.mutex.Unlock()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
-	vol, err := hp.state.GetVolumeByID(req.VolumeId)
+	vol, err := s.lvm.findVolumeByLVName(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, err
 	}
-
-	if hp.config.EnableAttach && !vol.Attached {
-		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume must be called on volume '%s' before staging on node",
-			vol.VolID)
+	if vol == nil {
+		return nil, status.Errorf(codes.NotFound, "volume %q not known", req.GetVolumeId())
 	}
 
-	if vol.Staged.Has(stagingTargetPath) {
-		glog.V(4).Infof("Volume %q is already staged at %q, nothing to do.", req.VolumeId, stagingTargetPath)
-		return &csi.NodeStageVolumeResponse{}, nil
-	}
+	// if s.config.EnableAttach && !vol.Attached {
+	// 	return nil, status.Errorf(codes.Internal, "ControllerPublishVolume must be called on volume '%s' before staging on node",
+	// 		vol.VolID)
+	// }
 
-	if !vol.Staged.Empty() {
-		return nil, status.Errorf(codes.FailedPrecondition, "volume %q is already staged at %v", req.VolumeId, vol.Staged)
-	}
+	// if vol.Staged.Has(stagingTargetPath) {
+	// 	glog.V(4).Infof("Volume %q is already staged at %q, nothing to do.", req.VolumeId, stagingTargetPath)
+	// 	return &csi.NodeStageVolumeResponse{}, nil
+	// }
 
-	vol.Staged.Add(stagingTargetPath)
-	if err := hp.state.UpdateVolume(vol); err != nil {
-		return nil, err
-	}
+	// if !vol.Staged.Empty() {
+	// 	return nil, status.Errorf(codes.FailedPrecondition, "volume %q is already staged at %v", req.VolumeId, vol.Staged)
+	// }
+
+	// vol.Staged.Add(stagingTargetPath)
+	// if err := hp.state.UpdateVolume(vol); err != nil {
+	// 	return nil, err
+	// }
 
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
-func (hp *hostPath) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-
+func (s *hostPath) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	// Check arguments
-	if len(req.GetVolumeId()) == 0 {
+	if req.GetVolumeId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
 	stagingTargetPath := req.GetStagingTargetPath()
@@ -316,26 +328,32 @@ func (hp *hostPath) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageV
 
 	// Lock before acting on global state. A production-quality
 	// driver might use more fine-grained locking.
-	hp.mutex.Lock()
-	defer hp.mutex.Unlock()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
-	vol, err := hp.state.GetVolumeByID(req.VolumeId)
+	vol, err := s.lvm.findVolumeByVolumeID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, err
 	}
-
-	if !vol.Staged.Has(stagingTargetPath) {
-		glog.V(4).Infof("Volume %q is not staged at %q, nothing to do.", req.VolumeId, stagingTargetPath)
+	if vol == nil {
+		// Already deleted ... certainly nothing we can do unstage it
+		klog.Warning("volume %q was not found; assuming already unstaged")
 		return &csi.NodeUnstageVolumeResponse{}, nil
-	}
 
-	if !vol.Published.Empty() {
-		return nil, status.Errorf(codes.Internal, "volume %q is still published at %q on node %q", vol.VolID, vol.Published, vol.NodeID)
+		// return nil, status.Errorf(codes.NotFound, "volume %q not found", req.GetVolumeId())
 	}
-	vol.Staged.Remove(stagingTargetPath)
-	if err := hp.state.UpdateVolume(vol); err != nil {
-		return nil, err
-	}
+	// if !vol.Staged.Has(stagingTargetPath) {
+	// 	glog.V(4).Infof("Volume %q is not staged at %q, nothing to do.", req.VolumeId, stagingTargetPath)
+	// 	return &csi.NodeUnstageVolumeResponse{}, nil
+	// }
+
+	// if !vol.Published.Empty() {
+	// 	return nil, status.Errorf(codes.Internal, "volume %q is still published at %q on node %q", vol.VolID, vol.Published, vol.NodeID)
+	// }
+	// vol.Staged.Remove(stagingTargetPath)
+	// if err := hp.state.UpdateVolume(vol); err != nil {
+	// 	return nil, err
+	// }
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
@@ -390,7 +408,7 @@ func (hp *hostPath) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCap
 			},
 		},
 	}
-	if hp.config.EnableVolumeExpansion && !hp.config.DisableNodeExpansion {
+	if hp.config.EnableVolumeExpansion /*&& !hp.config.DisableNodeExpansion*/ {
 		caps = append(caps, &csi.NodeServiceCapability{
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
@@ -404,110 +422,112 @@ func (hp *hostPath) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCap
 }
 
 func (hp *hostPath) NodeGetVolumeStats(ctx context.Context, in *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	if len(in.GetVolumeId()) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
-	}
-	if len(in.GetVolumePath()) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume Path not provided")
-	}
+	return nil, status.Error(codes.Unimplemented, "NodeGetVolumeStats not implemented")
+	// if len(in.GetVolumeId()) == 0 {
+	// 	return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	// }
+	// if len(in.GetVolumePath()) == 0 {
+	// 	return nil, status.Error(codes.InvalidArgument, "Volume Path not provided")
+	// }
 
-	// Lock before acting on global state. A production-quality
-	// driver might use more fine-grained locking.
-	hp.mutex.Lock()
-	defer hp.mutex.Unlock()
+	// // Lock before acting on global state. A production-quality
+	// // driver might use more fine-grained locking.
+	// hp.mutex.Lock()
+	// defer hp.mutex.Unlock()
 
-	volume, err := hp.state.GetVolumeByID(in.GetVolumeId())
-	if err != nil {
-		return nil, err
-	}
+	// volume, err := hp.state.GetVolumeByID(in.GetVolumeId())
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	if _, err := os.Stat(in.GetVolumePath()); err != nil {
-		return nil, status.Errorf(codes.NotFound, "Could not get file information from %s: %+v", in.GetVolumePath(), err)
-	}
+	// if _, err := os.Stat(in.GetVolumePath()); err != nil {
+	// 	return nil, status.Errorf(codes.NotFound, "Could not get file information from %s: %+v", in.GetVolumePath(), err)
+	// }
 
-	healthy, msg := hp.doHealthCheckInNodeSide(in.GetVolumeId())
-	glog.V(3).Infof("Healthy state: %+v Volume: %+v", volume.VolName, healthy)
-	available, capacity, used, inodes, inodesFree, inodesUsed, err := getPVStats(in.GetVolumePath())
-	if err != nil {
-		return nil, fmt.Errorf("get volume stats failed: %w", err)
-	}
+	// healthy, msg := hp.doHealthCheckInNodeSide(in.GetVolumeId())
+	// glog.V(3).Infof("Healthy state: %+v Volume: %+v", volume.VolName, healthy)
+	// available, capacity, used, inodes, inodesFree, inodesUsed, err := getPVStats(in.GetVolumePath())
+	// if err != nil {
+	// 	return nil, fmt.Errorf("get volume stats failed: %w", err)
+	// }
 
-	glog.V(3).Infof("Capacity: %+v Used: %+v Available: %+v Inodes: %+v Free inodes: %+v Used inodes: %+v", capacity, used, available, inodes, inodesFree, inodesUsed)
-	return &csi.NodeGetVolumeStatsResponse{
-		Usage: []*csi.VolumeUsage{
-			{
-				Available: available,
-				Used:      used,
-				Total:     capacity,
-				Unit:      csi.VolumeUsage_BYTES,
-			}, {
-				Available: inodesFree,
-				Used:      inodesUsed,
-				Total:     inodes,
-				Unit:      csi.VolumeUsage_INODES,
-			},
-		},
-		VolumeCondition: &csi.VolumeCondition{
-			Abnormal: !healthy,
-			Message:  msg,
-		},
-	}, nil
+	// glog.V(3).Infof("Capacity: %+v Used: %+v Available: %+v Inodes: %+v Free inodes: %+v Used inodes: %+v", capacity, used, available, inodes, inodesFree, inodesUsed)
+	// return &csi.NodeGetVolumeStatsResponse{
+	// 	Usage: []*csi.VolumeUsage{
+	// 		{
+	// 			Available: available,
+	// 			Used:      used,
+	// 			Total:     capacity,
+	// 			Unit:      csi.VolumeUsage_BYTES,
+	// 		}, {
+	// 			Available: inodesFree,
+	// 			Used:      inodesUsed,
+	// 			Total:     inodes,
+	// 			Unit:      csi.VolumeUsage_INODES,
+	// 		},
+	// 	},
+	// 	VolumeCondition: &csi.VolumeCondition{
+	// 		Abnormal: !healthy,
+	// 		Message:  msg,
+	// 	},
+	// }, nil
 }
 
 // NodeExpandVolume is only implemented so the driver can be used for e2e testing.
 func (hp *hostPath) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	if !hp.config.EnableVolumeExpansion {
-		return nil, status.Error(codes.Unimplemented, "NodeExpandVolume is not supported")
-	}
+	return nil, status.Error(codes.Unimplemented, "NodeExpandVolume not implemented")
+	// if !hp.config.EnableVolumeExpansion {
+	// 	return nil, status.Error(codes.Unimplemented, "NodeExpandVolume is not supported")
+	// }
 
-	volID := req.GetVolumeId()
-	if len(volID) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
-	}
+	// volID := req.GetVolumeId()
+	// if len(volID) == 0 {
+	// 	return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	// }
 
-	// Lock before acting on global state. A production-quality
-	// driver might use more fine-grained locking.
-	hp.mutex.Lock()
-	defer hp.mutex.Unlock()
+	// // Lock before acting on global state. A production-quality
+	// // driver might use more fine-grained locking.
+	// hp.mutex.Lock()
+	// defer hp.mutex.Unlock()
 
-	vol, err := hp.state.GetVolumeByID(volID)
-	if err != nil {
-		return nil, err
-	}
+	// vol, err := hp.state.GetVolumeByID(volID)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	volPath := req.GetVolumePath()
-	if len(volPath) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume path not provided")
-	}
+	// volPath := req.GetVolumePath()
+	// if len(volPath) == 0 {
+	// 	return nil, status.Error(codes.InvalidArgument, "Volume path not provided")
+	// }
 
-	capRange := req.GetCapacityRange()
-	if capRange == nil {
-		return nil, status.Error(codes.InvalidArgument, "Capacity range not provided")
-	}
-	capacity := int64(capRange.GetRequiredBytes())
-	if capacity > hp.config.MaxVolumeExpansionSizeNode {
-		return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", capacity, hp.config.MaxVolumeExpansionSizeNode)
-	}
+	// capRange := req.GetCapacityRange()
+	// if capRange == nil {
+	// 	return nil, status.Error(codes.InvalidArgument, "Capacity range not provided")
+	// }
+	// capacity := int64(capRange.GetRequiredBytes())
+	// if capacity > hp.config.MaxVolumeExpansionSizeNode {
+	// 	return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", capacity, hp.config.MaxVolumeExpansionSizeNode)
+	// }
 
-	info, err := os.Stat(volPath)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "Could not get file information from %s: %v", volPath, err)
-	}
+	// info, err := os.Stat(volPath)
+	// if err != nil {
+	// 	return nil, status.Errorf(codes.InvalidArgument, "Could not get file information from %s: %v", volPath, err)
+	// }
 
-	switch m := info.Mode(); {
-	case m.IsDir():
-		if vol.VolAccessType != state.MountAccess {
-			return nil, status.Errorf(codes.InvalidArgument, "Volume %s is not a directory", volID)
-		}
-	case m&os.ModeDevice != 0:
-		if vol.VolAccessType != state.BlockAccess {
-			return nil, status.Errorf(codes.InvalidArgument, "Volume %s is not a block device", volID)
-		}
-	default:
-		return nil, status.Errorf(codes.InvalidArgument, "Volume %s is invalid", volID)
-	}
+	// switch m := info.Mode(); {
+	// case m.IsDir():
+	// 	if vol.VolAccessType != state.MountAccess {
+	// 		return nil, status.Errorf(codes.InvalidArgument, "Volume %s is not a directory", volID)
+	// 	}
+	// case m&os.ModeDevice != 0:
+	// 	if vol.VolAccessType != state.BlockAccess {
+	// 		return nil, status.Errorf(codes.InvalidArgument, "Volume %s is not a block device", volID)
+	// 	}
+	// default:
+	// 	return nil, status.Errorf(codes.InvalidArgument, "Volume %s is invalid", volID)
+	// }
 
-	return &csi.NodeExpandVolumeResponse{}, nil
+	// return &csi.NodeExpandVolumeResponse{}, nil
 }
 
 // makeFile ensures that the file exists, creating it if necessary.

@@ -20,8 +20,9 @@ import (
 	"encoding/json"
 	"sync"
 
+	"context"
+
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -100,18 +101,17 @@ func logGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, h
 	}
 	glog.V(pri).Infof("GRPC call: %s", info.FullMethod)
 
-	v5 := glog.V(5)
-	if v5 {
-		v5.Infof("GRPC request: %s", protosanitizer.StripSecrets(req))
+	full := glog.V(pri + 1)
+	if full {
+		full.Infof("GRPC request: %s", protosanitizer.StripSecrets(req))
 	}
 	resp, err := handler(ctx, req)
 	if err != nil {
-		// Always log errors. Probably not useful though without the method name?!
-		glog.Errorf("GRPC error: %v", err)
+		glog.Errorf("GRPC error from %q: %v", info.FullMethod, err)
 	}
 
-	if v5 {
-		v5.Infof("GRPC response: %s", protosanitizer.StripSecrets(resp))
+	if full {
+		full.Infof("GRPC response %T: %s", resp, protosanitizer.StripSecrets(resp))
 
 		// In JSON format, intentionally logging without stripping secret
 		// fields due to below reasons:
