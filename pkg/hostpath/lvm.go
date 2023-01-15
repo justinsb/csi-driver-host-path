@@ -10,6 +10,9 @@ import (
 	"strings"
 
 	"context"
+
+	"k8s.io/klog/v2"
+	fs "k8s.io/kubernetes/pkg/volume/util/fs"
 )
 
 type LVM struct {
@@ -48,8 +51,12 @@ type reportLV struct {
 	// ConvertLV         string `json:"convert_lv"`
 }
 
-func (r *reportLV) VolumeSizeBytes() (int64, error) {
-	s := r.LogicalVolumeSize
+func (r *LVMVolume) LogicalVolumeName() string {
+	return r.info.LogicalVolumeName
+}
+
+func (r *LVMVolume) VolumeSizeBytes() (int64, error) {
+	s := r.info.LogicalVolumeSize
 	var multiplier int64
 	if strings.HasSuffix(s, "B") {
 		s = strings.TrimSuffix(s, "B")
@@ -63,7 +70,7 @@ func (r *reportLV) VolumeSizeBytes() (int64, error) {
 
 	n, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("error parsing size %q: %w", r.LogicalVolumeSize, err)
+		return 0, fmt.Errorf("error parsing size %q: %w", r.info.LogicalVolumeSize, err)
 	}
 	n *= multiplier
 	return n, nil
@@ -122,18 +129,61 @@ func runLVSReport(ctx context.Context, volumeName string) (*report, error) {
 	return &r.Reports[0], nil
 }
 
-func (l *LVM) findVolumeByLVName(ctx context.Context, lvName string) (*reportLV, error) {
-	return findLVInfo(ctx, l.vg, lvName)
+func (l *LVM) findVolumeByLVName(ctx context.Context, lvName string) (*LVMVolume, error) {
+	info, err := findLVInfo(ctx, l.vg, lvName)
+	if err != nil {
+		return nil, err
+	}
+	if info == nil {
+		return nil, nil
+	}
+	volumePath := "/volumes/" + l.vg + "/" + lvName
+
+	vol := &LVMVolume{
+		volumePath: volumePath,
+		info:       info,
+	}
+
+	if err := ensureMountLV(ctx, l.vg, vol.info.LogicalVolumeName, volumePath); err != nil {
+		return nil, err
+	}
+
+	return vol, nil
 }
 
-func (l *LVM) findVolumeByVolumeID(ctx context.Context, volumeID string) (*reportLV, error) {
+type LVMVolume struct {
+	volumePath string
+	info       *reportLV
+}
+
+func (l *LVMVolume) GetVolumePath() string {
+	return l.volumePath
+}
+
+type FSInfo struct {
+	BytesAvailable int64
+	BytesCapacity  int64
+}
+
+func (l *LVMVolume) GetFSInfo() (*FSInfo, error) {
+	volumePath := l.GetVolumePath()
+	fsInfo := &FSInfo{}
+	var err error
+	fsInfo.BytesAvailable, fsInfo.BytesCapacity, _, _, _, _, err = fs.Info(volumePath)
+	if err != nil {
+		return nil, err
+	}
+	return fsInfo, nil
+}
+
+func (l *LVM) findVolumeByVolumeID(ctx context.Context, volumeID string) (*LVMVolume, error) {
 	// To avoid what (currently) seems like an unnecessary layer of indirection, volumeID == lvName
 	lvName := volumeID
 
 	return l.findVolumeByLVName(ctx, lvName)
 }
 
-func (l *LVM) createThinLV(ctx context.Context, lvName string, size string, tags []string) (*reportLV, error) {
+func (l *LVM) createThinLV(ctx context.Context, lvName string, size string, tags []string) (*LVMVolume, error) {
 	// Must precreate thinpool with: lvcreate -L 200G -T pool/thinpool
 	// Can extend with e.g. /sbin/lvextend -L 20G pool/thinpool
 
@@ -186,10 +236,14 @@ func (l *LVM) createThinLV(ctx context.Context, lvName string, size string, tags
 	return lv, nil
 }
 
-func (l *LVM) deleteLV(ctx context.Context, lvName string) error {
+func (l *LVM) deleteLV(ctx context.Context, volume *LVMVolume) error {
+	if err := ensureUnmountLV(ctx, l.vg, volume.info.LogicalVolumeName, volume.volumePath); err != nil {
+		return err
+	}
+
 	args := []string{
 		"--yes",
-		l.vg + "/" + lvName,
+		l.vg + "/" + volume.LogicalVolumeName(),
 	}
 	c := exec.CommandContext(ctx, "/sbin/lvremove", args...)
 	var stdout bytes.Buffer
@@ -218,17 +272,7 @@ func findLVInfo(ctx context.Context, vgName string, lvName string) (*reportLV, e
 	return &report.LogicalVolumes[0], nil
 }
 
-func (l *LVM) getVolumePath(ctx context.Context, lvName string) (string, error) {
-	mountPath := "/volumes/" + l.vg + "/" + lvName
-
-	if err := mountLV(ctx, l.vg, lvName, mountPath); err != nil {
-		return "", err
-	}
-
-	return mountPath, nil
-}
-
-func mountLV(ctx context.Context, vgName string, lvName string, mountPath string) error {
+func ensureMountLV(ctx context.Context, vgName string, lvName string, mountPath string) error {
 	lvPath := fmt.Sprintf("/dev/%s/%s", vgName, lvName)
 
 	if err := os.MkdirAll(mountPath, 0777); err != nil {
@@ -249,12 +293,29 @@ func mountLV(ctx context.Context, vgName string, lvName string, mountPath string
 			exitCode := exitError.ExitCode()
 			if exitCode == 32 && strings.Contains(stderr.String(), "already mounted on") {
 				isAlreadyMounted = true
+				// TODO: Cache volumes
+				klog.Infof("volume %q was already mounted", mountPath)
 			}
 		}
 
 		if !isAlreadyMounted {
 			return fmt.Errorf("error running command %v (stdout=%q, stderr=%q): %w", c.Args, stdout.String(), stderr.String(), err)
 		}
+	}
+
+	return nil
+}
+
+func ensureUnmountLV(ctx context.Context, vgName string, lvName string, mountPath string) error {
+	args := []string{mountPath}
+	c := exec.CommandContext(ctx, "/bin/umount", args...)
+	var stdout bytes.Buffer
+	c.Stdout = &stdout
+	var stderr bytes.Buffer
+	c.Stderr = &stderr
+
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("error running command %v (stdout=%q, stderr=%q): %w", c.Args, stdout.String(), stderr.String(), err)
 	}
 
 	return nil

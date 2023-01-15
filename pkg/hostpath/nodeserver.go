@@ -79,7 +79,7 @@ func (s *hostPath) NodePublishVolume(ctx context.Context, req *csi.NodePublishVo
 		return nil, status.Errorf(codes.Internal, "error finding volume %q: %v", req.GetVolumeId(), err)
 	}
 	if vol == nil {
-		return nil, status.Errorf(codes.NotFound, "volume %q not found")
+		return nil, status.Errorf(codes.NotFound, "volume %q not found", req.GetVolumeId())
 	}
 
 	// if !ephemeralVolume {
@@ -170,10 +170,7 @@ func (s *hostPath) NodePublishVolume(ctx context.Context, req *csi.NodePublishVo
 		attrib := req.GetVolumeContext()
 		mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
 
-		volumePath, err := s.lvm.getVolumePath(ctx, vol.LogicalVolumeName)
-		if err != nil {
-			return nil, err
-		}
+		volumePath := vol.GetVolumePath()
 
 		glog.V(4).Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeId %v\nattributes %v\nmountflags %v\n",
 			targetPath, fsType, deviceId, readOnly, volumeId, attrib, mountFlags)
@@ -239,13 +236,18 @@ func (s *hostPath) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpubli
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("check target path: %w", err)
 		}
+		klog.Infof("mount point %q not found; assuming already unpublished", targetPath)
 	} else if !notMnt {
 		// Unmounting the image or filesystem.
 		err = mount.New("").Unmount(targetPath)
 		if err != nil {
 			return nil, fmt.Errorf("unmount target path: %w", err)
 		}
+		klog.Infof("unmounted mount point %q", targetPath)
+	} else {
+		klog.Infof("mount point %q is not a mount point; assuming already unpublished", targetPath)
 	}
+
 	// Delete the mount point.
 	// Does not return error for non-existent path, repeated calls OK for idempotency.
 	if err = os.RemoveAll(targetPath); err != nil {

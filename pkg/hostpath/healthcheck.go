@@ -126,11 +126,10 @@ func checkMountPointExist(volumePath string) (bool, error) {
 	return false, nil
 }
 
-func (hp *hostPath) checkPVCapacityValid(volID string) (bool, error) {
-	volumePath := hp.getVolumePath(volID)
-	_, fscapacity, _, _, _, _, err := fs.Info(volumePath)
+func (hp *hostPath) checkPVCapacityValid(volID string, vol *LVMVolume) (bool, error) {
+	fsInfo, err := vol.GetFSInfo()
 	if err != nil {
-		return false, fmt.Errorf("failed to get capacity info: %+v", err)
+		return false, err
 	}
 
 	volume, err := hp.state.GetVolumeByID(volID)
@@ -138,27 +137,26 @@ func (hp *hostPath) checkPVCapacityValid(volID string) (bool, error) {
 		return false, err
 	}
 	volumeCapacity := volume.VolSize
-	glog.V(3).Infof("volume capacity: %+v fs capacity:%+v", volumeCapacity, fscapacity)
-	return fscapacity >= volumeCapacity, nil
+	glog.V(3).Infof("volume capacity: %+v fs capacity:%+v", volumeCapacity, fsInfo.BytesCapacity)
+	return fsInfo.BytesCapacity >= volumeCapacity, nil
 }
 
 func getPVStats(volumePath string) (available int64, capacity int64, used int64, inodes int64, inodesFree int64, inodesUsed int64, err error) {
 	return fs.Info(volumePath)
 }
 
-func (hp *hostPath) checkPVUsage(volID string) (bool, error) {
-	volumePath := hp.getVolumePath(volID)
-	fsavailable, _, _, _, _, _, err := fs.Info(volumePath)
+func (hp *hostPath) checkPVUsage(volID string, vol *LVMVolume) (bool, error) {
+	fsInfo, err := vol.GetFSInfo()
 	if err != nil {
 		return false, err
 	}
 
-	glog.V(3).Infof("fs available: %+v", fsavailable)
-	return fsavailable > 0, nil
+	glog.V(3).Infof("fs available: %+v", fsInfo.BytesAvailable)
+	return fsInfo.BytesAvailable > 0, nil
 }
 
-func (hp *hostPath) doHealthCheckInControllerSide(volID string) (bool, string) {
-	volumePath := hp.getVolumePath(volID)
+func (hp *hostPath) doHealthCheckInControllerSide(volID string, vol *LVMVolume) (bool, string) {
+	volumePath := vol.GetVolumePath()
 	glog.V(3).Infof("Volume with ID %s has path %s.", volID, volumePath)
 	spExist, err := checkPathExist(volumePath)
 	if err != nil {
@@ -169,7 +167,7 @@ func (hp *hostPath) doHealthCheckInControllerSide(volID string) (bool, string) {
 		return false, "The source path of the volume doesn't exist"
 	}
 
-	capValid, err := hp.checkPVCapacityValid(volID)
+	capValid, err := hp.checkPVCapacityValid(volID, vol)
 	if err != nil {
 		return false, err.Error()
 	}
@@ -178,7 +176,7 @@ func (hp *hostPath) doHealthCheckInControllerSide(volID string) (bool, string) {
 		return false, "The capacity of volume is greater than actual storage"
 	}
 
-	available, err := hp.checkPVUsage(volID)
+	available, err := hp.checkPVUsage(volID, vol)
 	if err != nil {
 		return false, err.Error()
 	}
@@ -190,8 +188,8 @@ func (hp *hostPath) doHealthCheckInControllerSide(volID string) (bool, string) {
 	return true, ""
 }
 
-func (hp *hostPath) doHealthCheckInNodeSide(volID string) (bool, string) {
-	volumePath := hp.getVolumePath(volID)
+func (hp *hostPath) doHealthCheckInNodeSide(volID string, vol *LVMVolume) (bool, string) {
+	volumePath := vol.GetVolumePath()
 	mpExist, err := checkMountPointExist(volumePath)
 	if err != nil {
 		return false, err.Error()

@@ -4,7 +4,7 @@ metadata:
   name: my-csi-app
 spec:
   containers:
-    - name: my-frontend2
+    - name: my-frontend
       image: debian:bullseye
       volumeMounts:
       - mountPath: "/data"

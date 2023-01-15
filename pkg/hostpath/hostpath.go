@@ -125,10 +125,10 @@ func (hp *hostPath) Run() error {
 	return nil
 }
 
-// getVolumePath returns the canonical path for hostpath volume
-func (hp *hostPath) getVolumePath(volID string) string {
-	return filepath.Join(hp.config.StateDir, volID)
-}
+// // getVolumePath returns the canonical path for hostpath volume
+// func (hp *hostPath) getVolumePath(volID string) string {
+// 	return filepath.Join(hp.config.StateDir, volID)
+// }
 
 // getSnapshotPath returns the full path to where the snapshot is stored
 func (hp *hostPath) getSnapshotPath(snapshotID string) string {

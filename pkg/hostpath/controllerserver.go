@@ -138,7 +138,7 @@ func (s *hostPath) CreateVolume(ctx context.Context, req *csi.CreateVolumeReques
 		}
 
 		// We use the LV name as the volume id, rather than having to maintain an expensive mapping
-		volumeID := existing.LogicalVolumeName
+		volumeID := existing.LogicalVolumeName()
 		// volumeID, ok := existing.FindTag(TagVolumeID)
 		// if !ok {
 		// 	return nil, status.Errorf(codes.AlreadyExists, "volume with the same name %q but without id tag", req.GetName())
@@ -199,7 +199,7 @@ func (s *hostPath) CreateVolume(ctx context.Context, req *csi.CreateVolumeReques
 	}
 
 	// We use the LV name as the volume id, rather than having to maintain an expensive mapping
-	volumeID := created.LogicalVolumeName
+	volumeID := created.LogicalVolumeName()
 
 	response := &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
@@ -254,7 +254,7 @@ func (s *hostPath) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeReques
 	// 	klog.Warning(msg)
 	// }
 
-	if err := s.lvm.deleteLV(ctx, existing.LogicalVolumeName); err != nil {
+	if err := s.lvm.deleteLV(ctx, existing); err != nil {
 		return nil, fmt.Errorf("failed to delete volume %v: %w", volID, err)
 	}
 	klog.V(4).Infof("volume %v successfully deleted", volID)
